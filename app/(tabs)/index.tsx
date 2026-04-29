@@ -1,98 +1,148 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
+import { useRouter } from "expo-router";
+import {
+  Alert,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { ref, set } from "firebase/database";
+import { db } from "../../firebaseConfig";
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const handleSOS = async () => {
+    try {
+      // 1️⃣ Permission
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied");
+        return;
+      }
+
+      // 2️⃣ Get location
+      let loc = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = loc.coords;
+
+      // 3️⃣ Save to Firebase
+      const id = Date.now();
+      await set(ref(db, "emergencies/" + id), {
+        latitude,
+        longitude,
+        time: new Date().toISOString(),
+      });
+
+      // 4️⃣ Get contacts
+      const stored = await AsyncStorage.getItem("contacts");
+      console.log("RAW:", stored);
+      const contacts = stored ? JSON.parse(stored) : [];
+
+      console.log("Contacts:", contacts);
+
+      if (contacts.length === 0) {
+        Alert.alert("No contacts found");
+        return;
+      }
+
+      // 5️⃣ Prepare SMS message
+      const message = `🚨 Emergency! I need help.\nhttps://maps.google.com/?q=${latitude},${longitude}`;
+
+      // 6️⃣ Open SMS app (guaranteed method)
+      const url = `sms:${contacts.join(",")}?body=${encodeURIComponent(
+        message,
+      )}`;
+
+      console.log("Opening SMS URL:", url);
+
+      await Linking.openURL(url);
+
+      Alert.alert("🚨 Alert Ready", "SMS app opened");
+    } catch (err) {
+      console.log("Error:", err);
+      Alert.alert("Something went wrong");
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* 🔴 Top */}
+      <View style={styles.top}>
+        <Text style={styles.title}>EMERGENCY ALERT</Text>
+
+        <TouchableOpacity style={styles.sos} onPress={handleSOS}>
+          <Text style={styles.sosText}>SOS</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.sub}>Sends alert to all emergency contacts</Text>
+      </View>
+
+      {/* ⚪ Card */}
+      <View style={styles.card}>
+        <TouchableOpacity onPress={() => router.push("/location" as any)}>
+          <Text style={styles.item}>📍 My Location</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.push("/history" as any)}>
+          <Text style={styles.item}>📜 History</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => router.push("contacts" as any)}>
+          <Text style={styles.item}>👤 Emergency Contacts</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, backgroundColor: "#d32f2f" },
+
+  top: { alignItems: "center", marginTop: 60 },
+
+  title: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 30,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+
+  sos: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 5,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+
+  sosText: {
+    color: "#fff",
+    fontSize: 40,
+    fontWeight: "bold",
+  },
+
+  sub: {
+    color: "#fff",
+    marginTop: 20,
+  },
+
+  card: {
+    backgroundColor: "#fff",
+    margin: 20,
+    borderRadius: 20,
+    padding: 15,
+  },
+
+  item: {
+    fontSize: 16,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
 });
