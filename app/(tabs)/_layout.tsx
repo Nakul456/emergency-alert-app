@@ -6,10 +6,9 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "red",
+        tabBarActiveTintColor: "#d32f2f",
       }}
     >
-      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -19,8 +18,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* CONTACTS */}
       <Tabs.Screen
         name="contacts"
         options={{
@@ -31,7 +28,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* PROFILE (NEW) */}
       <Tabs.Screen
         name="profile"
         options={{
