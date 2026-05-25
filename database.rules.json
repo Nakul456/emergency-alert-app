@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "emergencies": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "emergency_logs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
