@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json.schemastore.org/expo",
+  "$schema": "https://exp.host/--/api/v2/project/configuration/schema/54.0.0",
   "expo": {
     "name": "okk",
     "slug": "okk",
@@ -27,7 +27,16 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.okk"
+      "package": "com.anonymous.okk",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "VIBRATE"
+      ]
     },
     "web": {
       "output": "static",
@@ -46,7 +55,9 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true,

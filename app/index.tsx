@@ -15,7 +15,7 @@ export default function Index() {
         } else {
           setIsFirstLaunch(true);
         }
-      } catch (error) {
+      } catch {
         setIsFirstLaunch(true);
       }
     }

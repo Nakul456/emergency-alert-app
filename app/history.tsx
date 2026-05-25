@@ -1,246 +1,123 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Linking,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-import { onValue, ref, remove } from "firebase/database";
-import { db } from "../firebaseConfig";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View, Linking, Alert } from "react-native";
+import { useTheme } from "../components/ThemeContext";
+import { getDatabase, ref, onValue } from "firebase/database";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 export default function HistoryScreen() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { colors } = useTheme();
+  const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
-    const emergencyRef = ref(db, "emergencies");
-
-    const unsubscribe = onValue(emergencyRef, (snapshot) => {
-      const val = snapshot.val();
-
-      if (val) {
-        const list = Object.keys(val).map((key) => ({
-          id: key,
-          ...val[key],
-        }));
-
-        setData(list.reverse());
-      } else {
-        setData([]);
+    const db = getDatabase();
+    const logsRef = ref(db, 'emergency_logs');
+    return onValue(logsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.keys(data).map(key => ({ id: key, ...data[key] })).reverse();
+        setLogs(list);
       }
-
-      setLoading(false);
     });
-
-    return () => unsubscribe();
   }, []);
 
-  // 🗺 Open in maps
-  const openMap = (lat: number, lng: number) => {
-    const url = `https://maps.google.com/?q=${lat},${lng}`;
-    Linking.openURL(url);
+  const openLocationMap = (lat: number, lng: number) => {
+    if (!lat || !lng) {
+      Alert.alert("No Location Data", "No coordinates are recorded for this log entry.");
+      return;
+    }
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Error", "Failed to launch native maps application.");
+    });
   };
 
-  // 🗑 Delete single item
-  const deleteItem = (id: string) => {
-    Alert.alert("Delete Alert?", "This will remove this history permanently.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await remove(ref(db, "emergencies/" + id));
-          } catch (err) {
-            console.log(err);
-            Alert.alert("Error deleting");
-          }
-        },
-      },
-    ]);
-  };
-
-  // 🧹 Clear all
-  const clearAll = () => {
-    Alert.alert("Clear All?", "This will delete all history permanently.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete All",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await remove(ref(db, "emergencies"));
-          } catch (err) {
-            console.log(err);
-            Alert.alert("Error clearing history");
-          }
-        },
-      },
-    ]);
-  };
-
-  const renderItem = ({ item }: any) => {
-    const formattedTime = item.time
-      ? new Date(item.time).toLocaleString()
-      : "Unknown time";
-
-    return (
-      <View style={styles.card}>
-        <Text style={styles.title}>🚨 Emergency Alert</Text>
-
-        <View style={styles.divider} />
-
-        <Text style={styles.text}>
-          📍 {item.latitude?.toFixed(4)}, {item.longitude?.toFixed(4)}
-        </Text>
-
-        <Text style={styles.time}>🕐 {formattedTime}</Text>
-
-        <TouchableOpacity
-          style={styles.mapBtn}
-          onPress={() => openMap(item.latitude, item.longitude)}
-        >
-          <Text style={styles.mapText}>Open in Maps</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => deleteItem(item.id)}
-        >
-          <Text style={styles.deleteText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  // 🔄 Loading
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#d32f2f" />
-        <Text style={{ marginTop: 10 }}>Loading history...</Text>
-      </View>
-    );
-  }
-
-  // 🚫 Empty
-  if (data.length === 0) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>No Alerts Yet 🚫</Text>
-        <Text style={styles.emptySub}>
-          Your emergency history will appear here
-        </Text>
-      </View>
-    );
-  }
+  const renderLog = ({ item, index }: { item: any, index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 100)} style={styles.logContainer}>
+       <View style={[styles.logCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.statusIndicator, { backgroundColor: item.status === 'Resolved' ? '#10B981' : '#EF4444' }]} />
+          <View style={styles.logContent}>
+             <View style={styles.logTop}>
+                <Text style={[styles.logType, { color: colors.text }]}>{item.type || "Emergency SOS"}</Text>
+                <Text style={[styles.logTime, { color: colors.subText }]}>{item.timestamp || "Just Now"}</Text>
+             </View>
+             <View style={styles.locRow}>
+                <Ionicons name="location" size={14} color="#EF4444" />
+                <Text style={[styles.locText, { color: colors.subText }]}>{item.location || "Location Shared"}</Text>
+             </View>
+             <View style={styles.badgeRow}>
+                <View style={[styles.badge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                   <Text style={styles.badgeText}>{item.status || "Alerted"}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.detailBtn}
+                  onPress={() => openLocationMap(item.latitude, item.longitude)}
+                >
+                   <Text style={styles.detailBtnText}>VIEW MAP</Text>
+                   <Ionicons name="chevron-forward" size={12} color="#EF4444" />
+                </TouchableOpacity>
+             </View>
+          </View>
+       </View>
+    </Animated.View>
+  );
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* 🧹 Clear all button */}
-      <TouchableOpacity style={styles.clearBtn} onPress={clearAll}>
-        <Text style={styles.clearText}>Clear All History</Text>
-      </TouchableOpacity>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.card }]}>
+           <Ionicons name="chevron-back" size={28} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>MISSION LOGS</Text>
+      </View>
 
       <FlatList
-        data={data}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ padding: 15 }}
-        showsVerticalScrollIndicator={false}
+        data={logs}
+        keyExtractor={item => item.id}
+        renderItem={renderLog}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={() => (
+           <View style={styles.listHeader}>
+              <Text style={[styles.listTitle, { color: colors.text }]}>Emergency History</Text>
+              <Text style={[styles.listSub, { color: colors.subText }]}>Chronological record of all emergency triggers and system alerts.</Text>
+           </View>
+        )}
+        ListEmptyComponent={() => (
+           <View style={styles.center}>
+              <Ionicons name="document-text-outline" size={60} color={colors.border} />
+              <Text style={[styles.emptyText, { color: colors.subText }]}>No logs found.</Text>
+           </View>
+        )}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 18,
-    marginBottom: 15,
-    elevation: 6,
-  },
-
-  title: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#d32f2f",
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#eee",
-    marginVertical: 10,
-  },
-
-  text: {
-    fontSize: 14,
-    marginBottom: 6,
-  },
-
-  time: {
-    fontSize: 13,
-    color: "#555",
-    marginBottom: 12,
-  },
-
-  mapBtn: {
-    backgroundColor: "#d32f2f",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  mapText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-
-  deleteBtn: {
-    marginTop: 10,
-    backgroundColor: "#eee",
-    padding: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-
-  deleteText: {
-    color: "red",
-    fontWeight: "bold",
-  },
-
-  clearBtn: {
-    backgroundColor: "#000",
-    padding: 12,
-    margin: 15,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  clearText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 6,
-  },
-
-  emptySub: {
-    color: "#777",
-  },
+  container: { flex: 1 },
+  header: { paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", borderBottomWidth: 1 },
+  backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 16, fontWeight: "900", letterSpacing: 2, marginLeft: 15 },
+  listContent: { padding: 24, paddingBottom: 100 },
+  listHeader: { marginBottom: 30 },
+  listTitle: { fontSize: 26, fontWeight: "900" },
+  listSub: { fontSize: 14, fontWeight: "600", marginTop: 8 },
+  logContainer: { marginBottom: 15 },
+  logCard: { flexDirection: "row", borderRadius: 30, borderWidth: 1, overflow: "hidden" },
+  statusIndicator: { width: 6 },
+  logContent: { flex: 1, padding: 20 },
+  logTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  logType: { fontSize: 18, fontWeight: "800" },
+  logTime: { fontSize: 12, fontWeight: "600" },
+  locRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 15 },
+  locText: { fontSize: 13, fontWeight: "600" },
+  badgeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  badgeText: { color: "#EF4444", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  detailBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
+  detailBtnText: { color: "#EF4444", fontSize: 12, fontWeight: "800" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", marginTop: 100 },
+  emptyText: { marginTop: 20, fontSize: 16, fontWeight: "700" },
 });
